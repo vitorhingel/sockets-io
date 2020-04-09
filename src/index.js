@@ -3,8 +3,16 @@ const http = require('http');
 const express = require('express');
 const socketio = require('socket.io');
 const Filter = require('bad-words');
-const { generateMessage } = require('./utils/messages');
-
+const {
+  generateMessage,
+  generateLocationMessage,
+} = require('./utils/messages');
+const {
+  addUser,
+  removeUser,
+  getUser,
+  getUsersInRoom,
+} = require('./utils/users');
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
@@ -17,9 +25,6 @@ app.use(express.static(publicDirectoryPath));
 
 io.on('connection', (socket) => {
   console.log('New Websocket Connection');
-
-  socket.emit('message', generateMessage('Welcome!'));
-  socket.broadcast.emit('message', generateMessage('A new user has joined'));
 
   socket.on('sendMessage', (message, callback) => {
     const filter = new Filter();
@@ -34,7 +39,9 @@ io.on('connection', (socket) => {
   socket.on('sendLocation', (location, callback) => {
     io.emit(
       'locationMessage',
-      `https://google.com/maps?q=${location.latitude},${location.longitude}`
+      generateLocationMessage(
+        `https://google.com/maps?q=${location.latitude},${location.longitude}`
+      )
     );
 
     callback();
@@ -42,6 +49,15 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     io.emit('message', generateMessage('An user has left'));
+  });
+
+  socket.on('join', ({ username, room }) => {
+    addUser({ id: socket.id, username, room });
+    socket.join(room);
+    socket.emit('message', generateMessage('Welcome!'));
+    socket.broadcast
+      .to(room)
+      .emit('message', generateMessage(`${username} has joined!`));
   });
 });
 
